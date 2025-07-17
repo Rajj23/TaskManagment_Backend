@@ -26,11 +26,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry){
         // Register WebSocket endpoint with proper CORS configuration
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("http://localhost:5173", "http://localhost:3000") // More secure than *
+                .setAllowedOriginPatterns("http://localhost:5173", "http://localhost:3000","https://organizotask.vercel.app/") // More secure than *
                 .withSockJS(); // Enable SockJS fallback
 
         // Also register without SockJS for native WebSocket clients
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("http://localhost:5173", "http://localhost:3000");
+                .setAllowedOriginPatterns("http://localhost:5173", "http://localhost:3000","https://organizotask.vercel.app/");
     }
 }
