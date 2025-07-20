@@ -83,7 +83,7 @@ public class TaskServiceImpl implements TaskService {
     @Override
     public List<TaskResponse> sortByPriority(String username, int page, int size,String order) {
         List<Task> tasks = getAllTaskRaw(username);
-        List<Task> sorted = mergeSortByPriority(tasks);
+        List<Task> sorted = quickSortByPriority(tasks);
         if("desc".equalsIgnoreCase(order)){
             Collections.reverse(sorted);
         }
@@ -96,7 +96,7 @@ public class TaskServiceImpl implements TaskService {
         List<Task> userTask = getAllTaskRaw(username);
         return userTask.stream()
                 .filter(task -> (task.getTitle() != null && task.getTitle().toLowerCase().contains(query.toLowerCase())) ||
-                                (task.getDescription() != null && task.getDescription().toLowerCase().contains(query.toLowerCase()))
+                        (task.getDescription() != null && task.getDescription().toLowerCase().contains(query.toLowerCase()))
                 )
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -190,36 +190,41 @@ public class TaskServiceImpl implements TaskService {
         return sorted;
     }
 
-    private List<Task> mergeSortByPriority(List<Task> tasks){
+    private List<Task> quickSortByPriority(List<Task> tasks){
         if(tasks.size()<=1) return tasks;
-        int mid = tasks.size()/2;
-        List<Task> left = mergeSortByPriority(tasks.subList(0,mid));
-        List<Task> right = mergeSortByPriority(tasks.subList(mid, tasks.size()));
-        return mergePriority(left,right);
-    }
 
-    private List<Task> mergePriority(List<Task> left,List<Task> right){
-        List<Task> sorted = new ArrayList<>();
-        int i=0,j=0;
-        while(i<left.size()&&j<right.size()){
-            Integer leftPriority = left.get(i).getPriority();
-            Integer rightPriority = right.get(j).getPriority();
+        Task pivot = tasks.get(tasks.size()-1);
+        Integer pivotPriority = pivot.getPriority();
+
+        List<Task> left = new ArrayList<>();
+        List<Task> right = new ArrayList<>();
+        List<Task> pivots = new ArrayList<>();
+        pivots.add(pivot);
+
+        for(int i=0;i<tasks.size()-1;i++){
+            Task current = tasks.get(i);
+            Integer currPriority = current.getPriority();
+
 
             // Handle null priorities - put them at the end
-            if(leftPriority == null && rightPriority == null){
-                sorted.add(left.get(i++));
-            } else if(leftPriority == null){
-                sorted.add(right.get(j++));
-            } else if(rightPriority == null){
-                sorted.add(left.get(i++));
-            } else if(leftPriority < rightPriority){
-                sorted.add(left.get(i++));
+            if(currPriority == null && pivotPriority == null){
+                pivots.add(current);
+            } else if(currPriority == null){
+                right.add(current);
+            } else if(pivotPriority == null){
+                left.add(current);
+            } else if(currPriority < pivotPriority){
+                left.add(current);
+            } else if (currPriority > pivotPriority) {
+                right.add(current);
             } else {
-                sorted.add(right.get(j++));
+                pivots.add(current);
             }
         }
-        sorted.addAll(left.subList(i,left.size()));
-        sorted.addAll(right.subList(j, right.size()));
+        List<Task> sorted = new ArrayList<>();
+        sorted.addAll(quickSortByPriority(left));
+        sorted.addAll(pivots);
+        sorted.addAll(quickSortByPriority(right));
         return sorted;
     }
 
