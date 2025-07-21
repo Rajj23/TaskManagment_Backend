@@ -15,7 +15,7 @@ public interface TaskService {
     List<TaskResponse> sortByDeadline(String username,int page,int size,String order);
     List<TaskResponse> sortByPriority(String username,int page, int size,String order);
     List<TaskResponse> searchTasks(String query,String username);
-//    List<TaskResponse> filterByStatus(String status, String username);
+    //    List<TaskResponse> filterByStatus(String status, String username);
     List<TaskResponse> filterByDateRange(LocalDateTime start, LocalDateTime end, String query, String username);
 
     //     Admin
@@ -25,4 +25,3 @@ public interface TaskService {
 
     int countTasks(String username);
 }
-

@@ -1,5 +1,6 @@
 package com.taskManagment.demo.Service.Implemention;
 
+import com.taskManagment.demo.Custom.TaskTrie;
 import com.taskManagment.demo.DTO.Task.TaskRequest;
 import com.taskManagment.demo.DTO.Task.TaskResponse;
 import com.taskManagment.demo.Entity.Task;
@@ -18,6 +19,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -26,13 +29,19 @@ public class TaskServiceImpl implements TaskService {
     private final TaskRepo taskRepo;
     private final UserService userService;
 
+    private final Map<String, TaskTrie> userTrieCache = new ConcurrentHashMap<>();
+
 
     @Override
     public TaskResponse createTask(TaskRequest request,String username){
         User user = userService.findByUsername(username);
         Task task = mapToTask(request);
         task.setUser(user);
-        return mapToResponse(taskRepo.save(task));
+        TaskResponse response = mapToResponse(taskRepo.save(task));
+
+        rebuildTrieForUser(username);
+
+        return response;
     }
 
     @Override
@@ -56,7 +65,11 @@ public class TaskServiceImpl implements TaskService {
         task.setStatus(request.getStatus());
         task.setPriority(request.getPriority());
         task.setDescription(request.getDescription());
-        return mapToResponse(taskRepo.save(task));
+        TaskResponse response = mapToResponse(taskRepo.save(task));
+
+        rebuildTrieForUser(username);
+
+        return response;
     }
 
     @Override
@@ -67,6 +80,7 @@ public class TaskServiceImpl implements TaskService {
             throw new RuntimeException("Not your task");
         }
         taskRepo.delete(task);
+        rebuildTrieForUser(username);
     }
 
     @Override
@@ -93,11 +107,9 @@ public class TaskServiceImpl implements TaskService {
 
     @Override
     public List<TaskResponse> searchTasks(String query, String username){
-        List<Task> userTask = getAllTaskRaw(username);
-        return userTask.stream()
-                .filter(task -> (task.getTitle() != null && task.getTitle().toLowerCase().contains(query.toLowerCase())) ||
-                        (task.getDescription() != null && task.getDescription().toLowerCase().contains(query.toLowerCase()))
-                )
+        TaskTrie userTrie = getOrBuildTrieForUser(username);
+        List<Task> matchedTasks = userTrie.searchByPrefix(query);
+        return matchedTasks.stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -156,7 +168,7 @@ public class TaskServiceImpl implements TaskService {
 
 
 
-    // Sorting
+    // Merge Sort
     private List<Task> mergeSortByDeadline(List<Task> tasks){
         if(tasks.size()<=1) return tasks;
         int mid = tasks.size()/2;
@@ -172,7 +184,6 @@ public class TaskServiceImpl implements TaskService {
             LocalDateTime leftDeadline = left.get(i).getDeadline();
             LocalDateTime rightDeadline = right.get(j).getDeadline();
 
-            // Handle null deadlines - put them at the end
             if(leftDeadline == null && rightDeadline == null){
                 sorted.add(left.get(i++));
             } else if(leftDeadline == null){
@@ -185,11 +196,17 @@ public class TaskServiceImpl implements TaskService {
                 sorted.add(right.get(j++));
             }
         }
-        sorted.addAll(left.subList(i, left.size()));
-        sorted.addAll(right.subList(j, right.size()));
+
+        while(i < left.size()) {
+            sorted.add(left.get(i++));
+        }
+        while(j < right.size()) {
+            sorted.add(right.get(j++));
+        }
         return sorted;
     }
 
+    // Quick Sort
     private List<Task> quickSortByPriority(List<Task> tasks){
         if(tasks.size()<=1) return tasks;
 
@@ -206,7 +223,6 @@ public class TaskServiceImpl implements TaskService {
             Integer currPriority = current.getPriority();
 
 
-            // Handle null priorities - put them at the end
             if(currPriority == null && pivotPriority == null){
                 pivots.add(current);
             } else if(currPriority == null){
@@ -275,5 +291,43 @@ public class TaskServiceImpl implements TaskService {
     public int countTasks(String username) {
         User user = userService.findByUsername(username);
         return taskRepo.findByUser(user).size();
+    }
+
+
+    // Trie
+    private TaskTrie getOrBuildTrieForUser(String username) {
+        return userTrieCache.computeIfAbsent(username, this::buildTrieForUser);
+    }
+
+
+    private TaskTrie buildTrieForUser(String username) {
+        TaskTrie trie = new TaskTrie();
+        List<Task> userTasks = getAllTaskRaw(username);
+
+        for (Task task : userTasks) {
+            trie.insertTask(task);
+        }
+
+        return trie;
+    }
+
+    private void rebuildTrieForUser(String username) {
+        userTrieCache.remove(username);
+        getOrBuildTrieForUser(username);
+    }
+
+    public void clearAllTrieCaches() {
+        userTrieCache.clear();
+    }
+
+    public void clearTrieCacheForUser(String username) {
+        userTrieCache.remove(username);
+    }
+
+    public Map<String, Object> getTrieCacheStats() {
+        Map<String, Object> stats = new ConcurrentHashMap<>();
+        stats.put("totalCachedUsers", userTrieCache.size());
+        stats.put("cachedUsers", userTrieCache.keySet());
+        return stats;
     }
 }
